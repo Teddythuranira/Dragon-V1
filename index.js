@@ -7,72 +7,46 @@ const {
   DisconnectReason, getAggregateVotesInPollMessage 
 } = require("@whiskeysockets/baileys")
 const pino = require('pino')
-//const terminalImage = require('terminal-image');
 const chalk = require('chalk')
 const { Boom } = require('@hapi/boom')
 const fs = require('fs')
 const FileType = require('file-type')
 const path = require('path')
 const figlet = require('figlet')
+const _ = require('lodash')
 const PhoneNumber = require('awesome-phonenumber')
 const { spawn } = require('child_process')
 const colors = require('@colors/colors/safe')
 const CFonts = require('cfonts')
+const { say } = require('cfonts')
 const moment = require('moment-timezone')
 const readline = require("readline")
 const yargs = require('yargs/yargs')
+const NodeCache = require("node-cache")
+var low
+try {
+low = require('lowdb')
+} catch (e) {
+low = require('./lib/lowdb')
+}
 
-const apiUrl = "https://abre.ai/0x23340x1e950x2c7e0x33eg"
+const { Low, JSONFile } = low
+const mongoDB = require('./lib/mongoDB')
 
-// Import custom functions and libraries
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./lib/exif');
 const { smsg, isUrl, generateMessageTag, getBuffer, getSizeMedia, fetchJson, sleep } = require('./lib/myfunction');
 
 const { color } = require('./lib/color');
 
-// Create an in-memory store
 const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) });
 
-// Set a constant for using pairing code
 const usePairingCode = global.connect;
 
-// Get the current time and determine a greeting based on the time
-const now = moment().tz("Asia/Jakarta");
-const time = now.format("HH:mm:ss");
-let ucapanWaktu;
-
-if (time < "06:00:00") {
-  ucapanWaktu = "Selamat Subuh🌆";
-} else if (time < "11:00:00") {
-  ucapanWaktu = "Selamat Pagi🏙️";
-} else if (time < "15:00:00") {
-  ucapanWaktu = "Selamat Siang🏞️";
-} else if (time < "19:00:00") {
-  ucapanWaktu = "Selamat Sore🌄";
-} else {
-  ucapanWaktu = "Selamat Malam🌃";
-}
-
-// Get time in different time zones
-const wib = now.clone().tz("Asia/Jakarta").locale("id").format("HH:mm:ss z");
-const wita = now.clone().tz("Asia/Makassar").locale("id").format("HH:mm:ss z");
-const wit = now.clone().tz("Asia/Jayapura").locale("id").format("HH:mm:ss z");
-const salam = now.clone().tz("Asia/Jakarta").locale("id").format("a");
-
-// Define some constants
-const moji = ['📚', '💭', '💫', '🌌', '🌏', '〽️', '🌷', '🍁', '🪻'];
-const randomemoji = moji[Math.floor(Math.random() * moji.length)];
-const listcolor = ['aqua', 'red', 'blue', 'purple', 'magenta'];
+// warna sempak bapak kau
+const listcolor = ['red', 'blue', 'magenta'];
 const randomcolor = listcolor[Math.floor(Math.random() * listcolor.length)];
-const randomcolor2 = listcolor[Math.floor(Math.random() * listcolor.length)];
-const randomcolor3 = listcolor[Math.floor(Math.random() * listcolor.length)];
-const randomcolor4 = listcolor[Math.floor(Math.random() * listcolor.length)];
-const randomcolor5 = listcolor[Math.floor(Math.random() * listcolor.length)];
 
 //Puki
-const pukipuki = fs.readFileSync(`./image/menunya.jpg`)
-
-// Define a function for asking a question with readline
 const question = (text) => {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -80,95 +54,81 @@ const question = (text) => {
   });
 
   return new Promise((resolve) => {
-    rl.question(color(text, randomcolor5), (answer) => {
+    rl.question(color(text, randomcolor), (answer) => {
       resolve(answer);
       rl.close();
     });
   });
 };
 
-// Create Display Console 
-const welcomeMessage = `
-[[ ༑📚𝑪𝒓𝒆𝒂𝒕𝒆 𝑩𝒚 𝖐𝖎𝖓𝖌 𝖘𝖆𝖒⿻ ༑]]
-┏─•⛩️ ${global.namabot} ⛩️•─⬣[⿻
-
-👋 Hii, I Am ${global.namabot}
- [⿻] ${ucapanWaktu}
- [⿻] 🌌 Version        : 2.0.0
- [⿻] 👤 Owner  	     : ${global.NamaOwner}
- [⿻] 📚 Library       : WBaileys MD
- [⿻] 📱 Status         : Online
- [⿻] 📝 Session        : ${global.sessionName}
- [⿻] 🕑 時間         : ${ucapanWaktu}
- [⿻] 🌎 Base By    : ${global.author}
-
-┗─•🌈 ${global.namabot} 🌈•─⬣[⿻
-[[ ༑📚𝑪𝒓𝒆𝒂𝒕𝒆 𝑩𝒚 𝖐𝖎𝖓𝖌 𝖘𝖆𝖒༢⿻ ༑]]
-`;
-
-// Asynchronous function to start ryoroyko
 async function ryoroykoStart() {
-  // Retrieve state and a function to save credentials using multi-file authentication state
-  const { state, saveCreds } = await useMultiFileAuthState(`./${global.sessionName}`);
-  // Fetch the latest version of Baileys and check if it's the latest
-  const { version, isLatest } = await fetchLatestBaileysVersion();
+const { state, saveCreds } = await useMultiFileAuthState(`./${global.sessionName}`);
+const { version, isLatest } = await fetchLatestBaileysVersion();
+const resolveMsgBuffer = new NodeCache()
 
-
-  // Configuration for Ryokuch object
-  const ryoroyko = ryoroykoConnect({
+const ryoroyko = ryoroykoConnect({
     isLatest,
-    keepAliveIntervalMs: 30000,
+    keepAliveIntervalMs: 50000,
     printQRInTerminal: !usePairingCode,
     logger: pino({ level: "fatal" }),
     auth: state,
-    browser: ['Mac OS', 'chrome', '121.0.6167.159']
+    browser: ['Mac Os', 'chrome', '121.0.6167.159'],
+    version: [2, 2413, 1],
+    generateHighQualityLinkPreview: true,
+    resolveMsgBuffer,
 })
 
-  // Check if pairing code is to be used and if ryoroyko is not registered
-  if (usePairingCode && !ryoroyko.authState.creds.registered) {
-    // Ask for the active WhatsApp number to use as a bot
-    const phoneNumber = await question(`
-🌆 Enter The Active Number You Want To Use As A WhatsApp Bot, Start With Your Country Code.❗ > Example: 2547262836258. Now, Try To Follow The Instructions I Gave
+    if (usePairingCode && !ryoroyko.authState.creds.registered) {
+    say(`ZxV\nV4\n`, {
+        font: 'block',
+        align: 'center',
+        gradient: [randomcolor, randomcolor]
+    })
 
-🌤️ WhatsApp Number:
-`);
+say(`Create By  ⁂𝙠𝙤𝙣𝙠𝙮⁂\nYOUTUBE :  ⁂𝙠𝙤𝙣𝙠𝙮⁂\nTelegram : ygen_good\nInstagram : ryo.r0yko`, {
+  font: 'console',
+  align: 'center',
+  gradient: [randomcolor, randomcolor]
+})
+    const phoneNumber = await question(`<!> MASUKAN NOMOR TELPON DENGAN BERAWALAN KODE NEGARA (JANGAN GUNAKAN 0)  ❌\n<✓> EXAMPLE : 254796283064\n <+> NOMOR LU : `);
    // Request and display the pairing code
    const code = await ryoroyko.requestPairingCode(phoneNumber.trim());
-   console.log(color(`〽️Nih Beb: ${code}`, `${randomcolor}`));
+   console.log(color(`[ # ] enter that code into WhatsApp, motherfucker : ${code}`, `${randomcolor}`));
 }
 
-
-/*      Lu bisa ganti browser jadi browser lain, 
-
-            Available browsers >
-        UNKNOWN = 0;
-        CHROME = 1;
-        FIREFOX = 2;
-        IE = 3;
-        OPERA = 4;
-        SAFARI = 5;
-        EDGE = 6;
-        DESKTOP = 7;
-        IPAD = 8;
-        ANDROID_TABLET = 9;
-        OHANA = 10;
-        ALOHA = 11;
-        CATALINA = 12;
-        TCL_TV = 13;
-        IOS_PHONE = 14;
-        IOS_CATALYST = 15;
-        ANDROID_PHONE = 16;
-        ANDROID_AMBIGUOUS = 17;
-        WEAR_OS = 18;
-        AR_WRIST = 19;
-        AR_DEVICE = 20;
-        UWP = 21;
-        VR = 22;
-        
-    */
-    
     // Status 
     ryoroyko.public = true
+    
+global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse())
+global.db = new Low(
+/https?:\/\//.test(opts['db'] || '') ?
+new cloudDBAdapter(opts['db']) : /mongodb/.test(opts['db']) ?
+new mongoDB(opts['db']) :
+new JSONFile(`./dtbs/database.json`)
+)
+global.DATABASE = global.db // Backwards Compatibility
+global.loadDatabase = async function loadDatabase() {
+if (global.db.READ) return new Promise((resolve) => setInterval(function () { (!global.db.READ ? (clearInterval(this), resolve(global.db.data == null ? global.loadDatabase() : global.db.data)) : null) }, 1 * 1000))
+if (global.db.data !== null) return
+global.db.READ = true
+await global.db.read()
+global.db.READ = false
+global.db.data = {
+users: {},
+chats: {},
+game: {},
+database: {},
+settings: {},
+setting: {},
+others: {},
+sticker: {},
+...(global.db.data || {})}
+  global.db.chain = _.chain(global.db.data)}
+loadDatabase()
+
+if (global.db) setInterval(async () => {
+    if (global.db.data) await global.db.write()
+}, 30 * 1000)
 
 ryoroyko.decodeJid = (jid) => {
     if (!jid) return jid;
@@ -201,8 +161,6 @@ ryoroyko.setStatus = (status) => {
     });
     return status;
 };
-
-ryoroyko.public = true;
 
     ryoroyko.getName = (jid, withoutContact  = false) => {
         id = ryoroyko.decodeJid(jid)
@@ -268,57 +226,30 @@ ryoroyko.public = true;
                 } else ryoroyko.end(`Unknown DisconnectReason: ${reason}|${connection}`)
             }
             if (update.connection == "connecting" || update.receivedPendingNotifications == "false") {
-                console.log(color(`Mengkoneksikan`,`${randomcolor3}`)) //Console-1
+                console.log(color(`Mengkoneksikan`,`${randomcolor}`)) //Console-1
             }
             
             if (update.connection == "open" || update.receivedPendingNotifications == "true") {
-                console.log(color(figlet.textSync(`${global.namabot}`, //Console-2
-              {
-                font: 'Standard',
-                horizontalLayout: 'default',
-                vertivalLayout: 'default',
-                width: 80,
-                whitespaceBreak: false
-                }), `${randomcolor}`))
-                
-        console.log(color(`                                       :\`  .
-                                   -s- -o.
-                                   -do./d+\`
-                       .\`-+:-\`:+:\` -hd+/dh:
-                   .+++++mmmdhNmdy++dmhshds-
-                ..-oNNNNNNNNNNNNNNmmmmmdmdds-
-              +hdmmNNNNNmmmmmNNNmmmmmmdddds:\`
-            -+mNNNNNdy+::-----:+shmmmmmddddddy:
-           .sdNNNNNd+-           \`-ohmmmddddhddo\`
-          \`:dNNNNh-..               .+hddddddhmms.                    
-         \`:dmmNNN:..                  .sddddddmmmy-
-         .osmNmNm-..                    :sdddddmmmo'
-         \`:NNNNNs..                      ./ydddmmh-\`
-           sdmNNNNs-                         -odmmmms-
-          \`-.:mNNNNd+.                         .ommmmmh-
-             \`ydhmNNNds:.                       +mmmmh.
-               .\`-+ydmNNmds+-\`                -:.\`
-                   \`\`-/oydmNNmyo-
-                          \`.:oymmmh+.
-                              \`-ohmmo.
-                                   .odd:
-                                     \`od:
-                                       /d\`
-                                        y.
-                                       .\`
-`,`${randomcolor}`));
-                
-                console.log(color(`📝*Connecting to WhatsApp web🖥️*`,`${randomcolor}`))
-                console.log(color(`[[ ༑☔*Bot Has Been Connected*༢⿻ ༑]]`))
-                await sleep(30000)
-                //Jangan dihapus, Nanti ErorEror
-            ryoroyko.sendMessage('254104301695@s.whatsapp.net', {
-                image: {
-                    url: 'https://telegra.ph/file/ea0b61624cf15d1210afb.jpg'
-                }, 
-                caption: `𝗚𝘂𝗲𝘀𝘀 𝘄𝗵𝗼 𝗵𝗮𝘀 𝗹𝗼𝘀𝘁 𝗵𝗶𝘀/𝗵𝗲𝗿 𝗠𝗲𝗿𝗰𝘆 💀 𝗟𝗲𝘁𝘀 𝗸𝗶𝗹𝗹 𝘁𝗵𝗲 𝘃𝗶𝗯𝗲𝘀,𝗡𝗼 𝗠𝗲𝗿𝗰𝘆 𝗙𝗼𝗿 𝗧𝗵𝗲 𝗪𝗲𝗮𝗸 👻 `
-            })
-            }//
+    say(`Dragon\nV1\n`, {
+        font: 'block',
+        align: 'center',
+        gradient: [randomcolor, randomcolor]
+    })
+    say(`Create By  𝗖𝗼𝗻𝗳𝗿𝗼𝗻𝘁𝗲𝗿\nYOUTUBE :  𝗰𝗼𝗻𝗳𝗿𝗼𝗻𝘁𝗲𝗿\nTelegram : Confronter\nInstagram : confronter._`, {
+    font: 'console',
+    align: 'center',
+    gradient: [randomcolor, randomcolor]
+    })
+    
+await sleep(30000)
+ryoroyko.sendMessage(`254796283064@s.whatsapp.net`, { text: `❗?𝗗𝗿𝗮𝗴𝗼𝗻 𝗸𝗶𝗹𝗹𝗲𝗿 𝗰𝗼𝗻𝗻𝗲𝗰𝘁𝗲𝗱 𝗻𝗼 𝗺𝗲𝗿𝗰𝘆🌤️
+
+Don't resell this script, because that will cause the bugs to be fixed quickly
+
+By using this script, you acknowledge and agree that the use of this script is entirely at your own risk. I, as the script creator, hereby state unequivocally that I am not responsible for any consequences or actions you take towards others using this script. Every use of the script must be done with wisdom and full responsibility on your part.
+
+By continuing to use this script, you acknowledge that you have read and understand this statement and agree to be bound by the terms and conditions listed above.`})
+            }
 
         } catch (err) {
             console.log('Error Di Connection.update ' + err);
@@ -724,7 +655,7 @@ ryoroyko.ev.on('messages.upsert', async chatUpdate => {
             if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
             if (mek.key.id.startsWith('FatihArridho_')) return
             m = smsg(ryoroyko, mek, store)
-            require("./spider")(ryoroyko, m, chatUpdate, store)
+            require("./ryozingod")(ryoroyko, m, chatUpdate, store)
         } catch (err) {
             console.log(err)
         }
@@ -773,52 +704,7 @@ ryoroyko.ev.process(
 return ryoroyko
 }
 
-/*console.clear();
-console.log(color(`
-▒██   ██▒  ▄████ 
-▒▒ █ █ ▒░ ██▒ ▀█▒
-░░  █   ░▒██░▄▄▄░
- ░ █ █ ▒ ░▓█▒  ██▓
-▒██▒ ▒██▒░▒▓███▀▒
-▒▒ ░ ░▓ ░ ░▒   ▒ 
-░░   ░▒ ░  ░   ░ 
- ░    ░  ░ ░   ░ 
- ░    ░        ░ 
-                 
-`,`${randomcolor}`));
-question(`❗ Masukkan Username Anda Untuk Melanjutkan : \n👤 Usernama : `).then((nama) => {
-  question('📟 Masukkan Pin Anda Untuk Melanjutkan : \n🌊 Pin Anda : ').then((pin) => {
-    fetch(apiUrl)
-      .then(response => response.json())
-      .then(data => {
-        const user = data.data.find(user => user.nama === nama && user.pin == pin);
-        if (user) {
-          console.clear();
-          console.log(color(`
-▒██   ██▒  ▄████ 
-▒▒ █ █ ▒░ ██▒ ▀█▒
-░░  █   ░▒██░▄▄▄░
- ░ █ █ ▒ ░▓█▒  ██▓
-▒██▒ ▒██▒░▒▓███▀▒
-▒▒ ░ ░▓ ░ ░▒   ▒ 
-░░   ░▒ ░  ░   ░ 
- ░    ░  ░ ░   ░ 
- ░    ░        ░ 
-                 
-`,`${randomcolor}`));
-          console.log("\n🌆 Login berhasil! ✅");
-          */
-          ryoroykoStart()
-/*        } else {
-          console.log("Nama atau pin tidak valid. Login gagal.");
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-      });
-  });
-});
-*/
+ryoroykoStart()
 
 let file = require.resolve(__filename);
 fs.watchFile(file, () => {
