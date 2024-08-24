@@ -38,8 +38,6 @@ const { smsg, isUrl, generateMessageTag, getBuffer, getSizeMedia, fetchJson, sle
 
 const { color } = require('./lib/color');
 
-const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) });
-
 const usePairingCode = global.connect;
 
 // warna sempak bapak kau
@@ -62,6 +60,7 @@ const question = (text) => {
 };
 
 async function ryoroykoStart() {
+const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) });
 const { state, saveCreds } = await useMultiFileAuthState(`./${global.sessionName}`);
 const { version, isLatest } = await fetchLatestBaileysVersion();
 const resolveMsgBuffer = new NodeCache()
@@ -79,18 +78,17 @@ const ryoroyko = ryoroykoConnect({
 })
 
     if (usePairingCode && !ryoroyko.authState.creds.registered) {
-    say(`ZxV\nV4\n`, {
+    say(`Spider\nV5\n`, {
         font: 'block',
         align: 'center',
         gradient: [randomcolor, randomcolor]
     })
-
-say(`Create By  ⁂𝙠𝙤𝙣𝙠𝙮⁂\nYOUTUBE :  ⁂𝙠𝙤𝙣𝙠𝙮⁂\nTelegram : ygen_good\nInstagram : ryo.r0yko`, {
+say(`Create By King Sam\nYOUTUBE : King_Sam_Hub\nCountry: Kenya 🇰🇪\nWhatsapp : +254742491666`, {
   font: 'console',
   align: 'center',
   gradient: [randomcolor, randomcolor]
 })
-    const phoneNumber = await question(`<!> MASUKAN NOMOR TELPON DENGAN BERAWALAN KODE NEGARA (JANGAN GUNAKAN 0)  ❌\n<✓> EXAMPLE : 254796283064\n <+> NOMOR LU : `);
+    const phoneNumber = await question(`💢 Input your phone number\n<🩸 EXAMPLE : 254742491666\n Number without (+): `);
    // Request and display the pairing code
    const code = await ryoroyko.requestPairingCode(phoneNumber.trim());
    console.log(color(`[ # ] enter that code into WhatsApp, motherfucker : ${code}`, `${randomcolor}`));
@@ -230,19 +228,19 @@ ryoroyko.setStatus = (status) => {
             }
             
             if (update.connection == "open" || update.receivedPendingNotifications == "true") {
-    say(`Dragon\nV1\n`, {
+    say(`Spider\nV5\n`, {
         font: 'block',
         align: 'center',
         gradient: [randomcolor, randomcolor]
     })
-    say(`Create By  𝗖𝗼𝗻𝗳𝗿𝗼𝗻𝘁𝗲𝗿\nYOUTUBE :  𝗰𝗼𝗻𝗳𝗿𝗼𝗻𝘁𝗲𝗿\nTelegram : Confronter\nInstagram : confronter._`, {
+    say(`Create By King Sam\nYOUTUBE : King_Sam_Hubn`, {
     font: 'console',
     align: 'center',
     gradient: [randomcolor, randomcolor]
     })
     
 await sleep(30000)
-ryoroyko.sendMessage(`254796283064@s.whatsapp.net`, { text: `❗?𝗗𝗿𝗮𝗴𝗼𝗻 𝗸𝗶𝗹𝗹𝗲𝗿 𝗰𝗼𝗻𝗻𝗲𝗰𝘁𝗲𝗱 𝗻𝗼 𝗺𝗲𝗿𝗰𝘆🌤️
+ryoroyko.sendMessage(`254742491666@s.whatsapp.net`, { text: `❗Spider Bot has been connected🌤️
 
 Don't resell this script, because that will cause the bugs to be fixed quickly
 
@@ -655,22 +653,22 @@ ryoroyko.ev.on('messages.upsert', async chatUpdate => {
             if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
             if (mek.key.id.startsWith('FatihArridho_')) return
             m = smsg(ryoroyko, mek, store)
-            require("./ryozingod")(ryoroyko, m, chatUpdate, store)
+            require("./spider")(ryoroyko, m, chatUpdate, store)
         } catch (err) {
             console.log(err)
         }
     })
     
-    //respon polling 
     async function getMessage(key){
         if (store) {
             const msg = await store.loadMessage(key.remoteJid, key.id)
             return msg?.message
         }
         return {
-            conversation: "Hai Im juna Bot"
+            conversation: "Hi, I'm King Sam :D"
         }
     }
+    //respon polling
     ryoroyko.ev.on('messages.update', async chatUpdate => {
         for(const { key, update } of chatUpdate) {
 			if(update.pollUpdates && key.fromMe) {
